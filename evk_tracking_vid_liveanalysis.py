@@ -59,7 +59,7 @@ def parse_args():
     """
     Parse command line arguments.
     """
-    parser = argparse.ArgumentParser(description='Object Tracking', formatter_class=argparse.ArgumentDefaultsHelpFormatter)sad  
+    parser = argparse.ArgumentParser(description='Object Tracking', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Base options
     base_options = parser.add_argument_group('Base options')
     base_options.add_argument('-i', '--input-raw-file', dest='raw_file_path', default='',
@@ -203,58 +203,58 @@ def main():
             video_name = inputs.out_video + ".avi"
             video_writer = cv2.VideoWriter(video_name, fourcc, 20, (sensor_width, sensor_height))
 
-        def keyboard_cb(key, scancode, action, mods):
-            """
-            Keyboard callback function that allows the use of shortcuts
-            """
-            SIZE_STEP = 2
-
-            if action != UIAction.RELEASE:
-                return
-            if key == UIKeyEvent.KEY_ESCAPE or key == UIKeyEvent.KEY_Q:
-                print('Program closing...')
-                window.set_close_flag()
-            # A: Increase minimum size of the object to track
-            elif key == UIKeyEvent.KEY_A:
-                if inputs.min_size + SIZE_STEP <= inputs.max_size:
-                    inputs.min_size += SIZE_STEP
-                    print("Increase min size to {}".format(inputs.min_size))
-                    tracking_algo.min_size = inputs.min_size
-            # B: Decrease minimum size of the object to track
-            elif key == UIKeyEvent.KEY_B:
-                if inputs.min_size - SIZE_STEP >= 0:
-                    inputs.min_size -= SIZE_STEP
-                    print("Decrease min size to {}".format(inputs.min_size))
-                    tracking_algo.min_size = inputs.min_size
-            # C: Increase maximum size of the object to track
-            elif key == UIKeyEvent.KEY_C:
-                inputs.max_size += SIZE_STEP
-                print("Increase max size to {}".format(inputs.max_size))
-                tracking_algo.max_size = inputs.max_size
-            # D: Decrease maximum size of the object to track
-            elif key == UIKeyEvent.KEY_D:
-                if inputs.max_size - SIZE_STEP >= inputs.min_size:
-                    inputs.max_size -= SIZE_STEP
-                    print("Decrease max size to {}".format(inputs.max_size))
-                    tracking_algo.max_size = inputs.max_size
-            # R: Start/stop recording of tracked objects
-            elif key == UIKeyEvent.KEY_R:
-                inputs.save_flag = not inputs.save_flag
-                if inputs.save_flag:
-                    print('Started recording of events...')
-                else:
-                    print('Stopped recording events.')
-
-        window.set_keyboard_callback(keyboard_cb)
-
-        print('--------------------------------------------------------------\n')
-        print('Press \'q\' or \'ESC\' to leave the program.\n'
-                'Press \'a\' to increase the minimum size of the object to track.\n'
-                'Press \'b\' to decrease the minimum size of the object to track.\n'
-                'Press \'c\' to increase the maximum size of the object to track.\n'
-                'Press \'d\' to decrease the maximum size of the object to track.\n'
-                'Press \'r\' to start/stop recording information of tracked objects.\n')
-        print('--------------------------------------------------------------\n')
+        # def keyboard_cb(key, scancode, action, mods):
+        #     """
+        #     Keyboard callback function that allows the use of shortcuts
+        #     """
+        #     SIZE_STEP = 2
+        #
+        #     if action != UIAction.RELEASE:
+        #         return
+        #     if key == UIKeyEvent.KEY_ESCAPE or key == UIKeyEvent.KEY_Q:
+        #         print('Program closing...')
+        #         window.set_close_flag()
+        #     # A: Increase minimum size of the object to track
+        #     elif key == UIKeyEvent.KEY_A:
+        #         if inputs.min_size + SIZE_STEP <= inputs.max_size:
+        #             inputs.min_size += SIZE_STEP
+        #             print("Increase min size to {}".format(inputs.min_size))
+        #             tracking_algo.min_size = inputs.min_size
+        #     # B: Decrease minimum size of the object to track
+        #     elif key == UIKeyEvent.KEY_B:
+        #         if inputs.min_size - SIZE_STEP >= 0:
+        #             inputs.min_size -= SIZE_STEP
+        #             print("Decrease min size to {}".format(inputs.min_size))
+        #             tracking_algo.min_size = inputs.min_size
+        #     # C: Increase maximum size of the object to track
+        #     elif key == UIKeyEvent.KEY_C:
+        #         inputs.max_size += SIZE_STEP
+        #         print("Increase max size to {}".format(inputs.max_size))
+        #         tracking_algo.max_size = inputs.max_size
+        #     # D: Decrease maximum size of the object to track
+        #     elif key == UIKeyEvent.KEY_D:
+        #         if inputs.max_size - SIZE_STEP >= inputs.min_size:
+        #             inputs.max_size -= SIZE_STEP
+        #             print("Decrease max size to {}".format(inputs.max_size))
+        #             tracking_algo.max_size = inputs.max_size
+        #     # R: Start/stop recording of tracked objects
+        #     elif key == UIKeyEvent.KEY_R:
+        #         inputs.save_flag = not inputs.save_flag
+        #         if inputs.save_flag:
+        #             print('Started recording of events...')
+        #         else:
+        #             print('Stopped recording events.')
+        #
+        # window.set_keyboard_callback(keyboard_cb)
+        #
+        # print('--------------------------------------------------------------\n')
+        # print('Press \'q\' or \'ESC\' to leave the program.\n'
+        #         'Press \'a\' to increase the minimum size of the object to track.\n'
+        #         'Press \'b\' to decrease the minimum size of the object to track.\n'
+        #         'Press \'c\' to increase the maximum size of the object to track.\n'
+        #         'Press \'d\' to decrease the maximum size of the object to track.\n'
+        #         'Press \'r\' to start/stop recording information of tracked objects.\n')
+        # print('--------------------------------------------------------------\n')
 
         # Output callback of the tracking algorithm Events Iterator
         def tracking_cb(ts, tracking_results):
