@@ -17,12 +17,18 @@ import numpy as np
 import datetime
 import os, sys
 import csv
+from statistics import mode
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 from metavision_core.event_io import EventsIterator, LiveReplayEventsIterator, is_live_camera
 from metavision_sdk_analytics import TrackingAlgorithm, TrackingConfig, draw_tracking_results
-from metavision_sdk_core import OnDemandFrameGenerationAlgorithm
+from metavision_sdk_core import OnDemandFrameGenerationAlgorithm, RoiFilterAlgorithm
 from metavision_sdk_cv import ActivityNoiseFilterAlgorithm, TrailFilterAlgorithm
 from metavision_sdk_ui import EventLoop, BaseWindow, MTWindow, UIAction, UIKeyEvent
+
+# Custom functions
+# from fb_addons import *
 
 class Inputs:
     def __init__(self, args):
@@ -145,7 +151,25 @@ def get_biases_from_file(path: str):
             biases[split[1].strip()] = int(split[0])
     return biases
 
+def find_mode_id(total_results):
+    ids = [x[-2] for x in total_results]
+    return mode(ids)
 
+def get_time_id(total_results,id):
+    return [r[2] for r in total_results if r[-2] == id]
+
+def get_x_id(total_results,id):
+    return [r[3] for r in total_results if r[-2] == id]
+
+def get_y_id(total_results,id):
+    return [r[4] for r in total_results if r[-2] == id]
+
+x_vals=[]
+y_vals=[]
+def animate(x,y):
+    x_vals.append(x)
+    y_vals.append(y)
+    plt.plot(x_vals, y_vals)
 
 def main():
     """
@@ -153,9 +177,11 @@ def main():
     """
     args = parse_args()
     inputs = Inputs(args)
-
+    print(inputs.bias_file)
     total_results = []
     measurement_index = 0
+
+
 
     # Events iterator on Camera or RAW file - CD PRODUCER
     mv_iterator = EventsIterator(input_path=inputs.input_path, start_ts=inputs.process_from,
@@ -177,10 +203,29 @@ def main():
 
     sensor_height, sensor_width = mv_iterator.get_size() # Sensor Geometry
 
+    #defining roi
+    centre_x = round(sensor_width/2)
+    centre_y = round(sensor_height/2)
+    xi,yi = 100,100
+
+    x0, y0 = centre_x-xi, centre_y-yi
+    x1, y1 = centre_x+xi, centre_y+yi
+
+    print(sensor_height, sensor_width)
+    roi_filter = RoiFilterAlgorithm(x0, y0, x1, y1)
+    """
+    x0 = X coordinate of the upper left corner of the ROI window
+    y0 = Y coordinate of the upper left corner of the ROI window
+    x1 = X coordinate of the lower right corner of the ROI window
+    y1 = Y coordinate of the lower right corner of the ROI window
+    """
+    # roi_filter = RoiFilterAlgorithm(75, 25, 100, 45)
+    events_buf = roi_filter.get_empty_output_buffer()
+
     # Noise + Trail filter that will be applied to events
     activity_noise_filter = ActivityNoiseFilterAlgorithm(sensor_width, sensor_height, inputs.activity_time_ths)
     trail_filter = TrailFilterAlgorithm(sensor_width, sensor_height, inputs.activity_trail_ths)
-    events_buf = ActivityNoiseFilterAlgorithm.get_empty_output_buffer()
+    # events_buf = ActivityNoiseFilterAlgorithm.get_empty_output_buffer()
 
     # Tracking Algorithm
     tracking_config = TrackingConfig()  # Default configuration
@@ -265,6 +310,7 @@ def main():
             nonlocal total_results
             nonlocal measurement_index
 
+
             if measurement_index < inputs.no_runs:
                 events_frame_gen_algo.generate(ts, output_img)
                 if inputs.save_flag:
@@ -274,8 +320,26 @@ def main():
                         total_results.extend(callback_results)
 
                         current_time = callback_results[0][2]
-                        start_time = inputs.measurement_time*measurement_index
 
+                        # print(np.shape(total_results[1][:]))
+
+                        if len(total_results)>10000:
+                            modeID = find_mode_id(total_results)
+                            print('ID = ', modeID)
+                            x = get_x_id(total_results,modeID)
+                            y = get_y_id(total_results,modeID)
+                            t = get_time_id(total_results,modeID)
+                            # y = callback_results[0][4]
+                            print('t =', t[-1], 'x=',x[-1],'y=', y[-1])
+
+
+                        start_time = inputs.measurement_time*measurement_index
+                        print('current_time', current_time)
+                        print('start_time', start_time)
+                        print('measurement time', inputs.measurement_time)
+                        print('measurement index',measurement_index)
+
+                        print(current_time>=start_time + inputs.measurement_time)
                         if (current_time >= start_time + inputs.measurement_time):
                             # Save run
                             measurement_index += 1 # The first interval saved is interval 1
@@ -293,19 +357,26 @@ def main():
             else:
                 sys.exit()
 
-                    #         del file_timestamp
-                    #         del  file_path
-                    #         del total_results
-                    #         total_results = []
-                    #     del current_time
-                    #     del start_time
-                    # del callback_results
+ # str(datetime.datetime.now().strftime('%Y%m%d_%H-%M-%S'))
+                    #     file_path = inputs.output_csv_path + file_timestamp + '.csv'
+                    #
+                    #     with open(file_path,'w') as new_file:
+                    #         writer = csv.writer(new_file, delimiter=',', lineterminator='\n')
+                    #         writer.writerows(total_results)
+                    #
+                    #     print(len(total_results))
+                    #     print("Results saved at " + file_path)
+                    #     new_file.close()
+                    #     total_results = []
+            # else:
+            #     sys.exit()
 
             if inputs.draw_bb:
                 draw_tracking_results(ts, tracking_results, output_img)
             window.show_async(output_img)
             if inputs.out_video:
                 video_writer.write(output_img)
+
 
         # Setting output callback to tracking algorithm (asynchronous)
         tracking_algo.set_output_callback(tracking_cb)
@@ -318,6 +389,7 @@ def main():
 
             # Process events
             activity_noise_filter.process_events(evs, events_buf)
+            roi_filter.process_events(evs, events_buf)
             trail_filter.process_events_(events_buf)
             events_frame_gen_algo.process_events(events_buf)
             tracking_algo.process_events(events_buf)
