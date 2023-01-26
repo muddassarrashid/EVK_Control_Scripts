@@ -20,7 +20,7 @@ import csv
 
 from metavision_core.event_io import EventsIterator, LiveReplayEventsIterator, is_live_camera
 from metavision_sdk_analytics import TrackingAlgorithm, TrackingConfig, draw_tracking_results
-from metavision_sdk_core import OnDemandFrameGenerationAlgorithm
+from metavision_sdk_core import OnDemandFrameGenerationAlgorithm, RoiFilterAlgorithm
 from metavision_sdk_cv import ActivityNoiseFilterAlgorithm, TrailFilterAlgorithm
 from metavision_sdk_ui import EventLoop, BaseWindow, MTWindow, UIAction, UIKeyEvent
 
@@ -53,6 +53,12 @@ class Inputs:
         self.draw_bb = args.draw_bounding_boxes
         self.replay_factor = args.replay_factor
         self.no_runs = args.no_runs
+        self.roi_width = args.roi_width
+        self.roi_height = args.roi_height
+        self.roi_x0 = args.roi_x0
+        self.roi_y0 = args.roi_y0
+        self.roi_x1 = args.roi_x1
+        self.roi_y1 = args.roi_y1
 
 def parse_args():
     import argparse
@@ -113,8 +119,22 @@ def parse_args():
     replay_options.add_argument('-rf', '--replay_factor', dest='replay_factor', type=float, default=1.,
                                 help='Replay factor. If greater than 1.0 we replay with slow-motion, otherwise this is a speed-up over real-time. Default: 1.0')
 
-    args = parser.parse_args()
+    # Region of Interest options
+    roi_options = parser.add_argument_group('ROI Options')
+    roi_options.add_argument('-xw', '--roi_width', dest='roi_width', type = int, default = None,
+                                help = 'defines the frame width needed for region of interest')
+    roi_options.add_argument('-xh', '--roi_height', dest='roi_height', type = int, default = None,
+                                help = 'defines the frame heigth needed for region of interest')
+    roi_options.add_argument('-x0', '--roi_x0', dest='roi_x0', type = int, default = None,
+                                help = 'X coordinate of the upper left corner of the ROI window')
+    roi_options.add_argument('-y0', '--roi_y0', dest='roi_y0', type = int, default = None,
+                                help = 'Y coordinate of the upper left corner of the ROI window')
+    roi_options.add_argument('-x1', '--roi_x1', dest='roi_x1', type = int, default = None,
+                                help = 'X coordinate of the lower right corner of the ROI window')
+    roi_options.add_argument('-y1', '--roi_y1', dest='roi_y1', type = int, default = None,
+                                help = 'Y coordinate of the lower right corner of the ROI window')
 
+    args = parser.parse_args()
     if args.process_to and args.process_from > args.process_to:
         print(f'The processing time interval is not valid. [{args.process_from,}, {args.process_to}]')
         exit(1)
@@ -176,6 +196,37 @@ def main():
         mv_iterator = LiveReplayEventsIterator(mv_iterator, replay_factor=inputs.replay_factor)
 
     sensor_height, sensor_width = mv_iterator.get_size() # Sensor Geometry
+
+    #defining roi
+    centre_x = round(sensor_width/2)
+    centre_y = round(sensor_height/2)
+    if inputs.roi_width and inputs.roi_height:
+        xi,yi = inputs.roi_width, inputs.roi_height
+        x0, y0 = centre_x-xi, centre_y-yi
+        x1, y1 = centre_x+xi, centre_y+yi
+    elif inputs.roi_x0 and inputs.roi_y0 and inputs.roi_x1 and inputs.roi_y1:
+        x0, y0 = inputs.roi_x0, inputs.roi_y0
+        x1, y1 = inputs.roi_x1, inputs.roi_y1
+    else:
+        xi,yi = centre_x, centre_y
+        x0, y0 = centre_x-xi, centre_y-yi
+        x1, y1 = centre_x+xi, centre_y+yi
+
+
+    """
+    x0 = X coordinate of the upper left corner of the ROI window
+    y0 = Y coordinate of the upper left corner of the ROI window
+    x1 = X coordinate of the lower right corner of the ROI window
+    y1 = Y coordinate of the lower right corner of the ROI window
+    """
+
+
+
+    print(sensor_height, sensor_width)
+    roi_filter = RoiFilterAlgorithm(x0, y0, x1, y1)
+    # roi_filter = RoiFilterAlgorithm(75, 25, 100, 45)
+    events_buf = roi_filter.get_empty_output_buffer()
+
 
     # Noise + Trail filter that will be applied to events
     activity_noise_filter = ActivityNoiseFilterAlgorithm(sensor_width, sensor_height, inputs.activity_time_ths)
@@ -281,7 +332,7 @@ def main():
                             measurement_index += 1 # The first interval saved is interval 1
                             file_timestamp = str(datetime.datetime.now().strftime('%Y%m%d_%H-%M-%S'))
                             file_path = inputs.output_csv_path + file_timestamp + '.csv'
-                            
+
                             with open(file_path,'w') as new_file:
                                 writer = csv.writer(new_file, delimiter=',', lineterminator='\n')
                                 writer.writerows(total_results)
@@ -302,6 +353,7 @@ def main():
                     # del callback_results
 
             if inputs.draw_bb:
+
                 draw_tracking_results(ts, tracking_results, output_img)
             window.show_async(output_img)
             if inputs.out_video:
@@ -318,6 +370,7 @@ def main():
 
             # Process events
             activity_noise_filter.process_events(evs, events_buf)
+            roi_filter.process_events(evs, events_buf)
             trail_filter.process_events_(events_buf)
             events_frame_gen_algo.process_events(events_buf)
             tracking_algo.process_events(events_buf)
